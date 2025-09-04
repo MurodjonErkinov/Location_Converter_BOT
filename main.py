@@ -39,6 +39,9 @@ while True:
         chatId = update["message"]["chat"]["id"]
         if "text" in update["message"]:
             text = update["message"]["text"]
+            if "/start" in text:
+                requests.post(url=f"https://api.telegram.org/bot{token}/sendMessage",params={"chat_id": chatId, "text": "Salom! Link yuboring"})
+                continue
             host, lat, lon = find_coords(text)
             print(host, lat, lon, chatId)
             if host and lat and lon:
