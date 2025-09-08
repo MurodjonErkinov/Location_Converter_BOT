@@ -5,7 +5,7 @@ import urllib.parse
 
 app = Flask(__name__)
 
-token = "7958597397:AAGzsI6L4Ug9xl1UEfRqx6z81d53kZT-k0s"
+token = "8340342971:AAEbagkXnr7j9sIROp1DnspMd3uGCgisPZs"
 
 def find_coords(url: str):
     host = False
@@ -72,4 +72,5 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
+
 
