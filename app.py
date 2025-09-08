@@ -2,10 +2,11 @@ from flask import Flask, request
 import requests
 import re
 import urllib.parse
+import os
 
 app = Flask(__name__)
 
-token = "8340342971:AAEbagkXnr7j9sIROp1DnspMd3uGCgisPZs"
+token = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 def find_coords(url: str):
     host = False
@@ -72,5 +73,6 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
+
 
 
