@@ -50,7 +50,7 @@ def webhook():
     if "text" in message:
         text = message["text"]
         if "/start" in text:
-            sendMessage(chatId, "Salom! Link yuboring")
+            sendMessage(chatId, "Salom! Location yuboring")
         else:
             host, lat, lon = find_coords(text)
             if host and lat and lon:
@@ -72,3 +72,4 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
+
