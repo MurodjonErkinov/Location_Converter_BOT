@@ -16,11 +16,15 @@ def find_coords(url: str):
         return False, False, False
     url = urllib.parse.unquote(url)
     regex = r"[@=](\d+)\.(\d+),(\d+)\.(\d+)"
+    regex2 = r"(-?\d+\.\d+)!4d(-?\d+\.\d+)"
     match = re.search(regex, url)
     if not match:
         response = requests.get(url)
         url = urllib.parse.unquote(response.url)
-        match = re.search(regex, url)
+        if "utm_source" in url: 
+            match = re.search(regex2,url)
+        else:
+            match = re.search(regex, url)
     if match:
         host = urllib.parse.urlparse(url).hostname
         if "google" in host:    
@@ -73,6 +77,7 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
+
 
 
 
