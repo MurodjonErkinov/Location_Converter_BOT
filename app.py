@@ -12,8 +12,10 @@ def find_coords(url: str):
     host = False
     lon = False
     lat = False
-    if not url.startswith("http"):
+    match = re.search(r'(https?:\/\/.*)', url)
+    if not match:
         return False, False, False
+    url = match.group(1)    
     url = urllib.parse.unquote(url)
     regex = r"[@=](\d+)\.(\d+),(\d+)\.(\d+)"
     regex2 = r"!3d(\d+)\.(\d+)!4d(\d+)\.(\d+)"
@@ -77,6 +79,7 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
+
 
 
 
