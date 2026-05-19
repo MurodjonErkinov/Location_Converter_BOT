@@ -138,6 +138,20 @@ def find_coords(url: str):
             m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", page)
             if m:
                 return m.group(1), m.group(2), "google"
+
+            # JSON-ish patterns often present in Google Maps HTML
+            # Prefer "lat"/"lng" pairs when available.
+            m = re.search(r'"lat"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"lng"\s*:\s*(-?\d+(?:\.\d+)?)', page)
+            if m:
+                return m.group(1), m.group(2), "google"
+            m = re.search(r'"lng"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"lat"\s*:\s*(-?\d+(?:\.\d+)?)', page)
+            if m:
+                return m.group(2), m.group(1), "google"
+
+            # Some payloads contain a "center":[lat,lng] array
+            m = re.search(r'"center"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]', page)
+            if m:
+                return m.group(1), m.group(2), "google"
             return None
 
         # Some short links (Google/Yandex) may not 302 to the long URL.
@@ -326,7 +340,6 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
-
 
 
 
