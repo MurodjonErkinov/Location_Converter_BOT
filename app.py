@@ -3,6 +3,7 @@ import requests
 import re
 import urllib.parse
 import os
+import html
 
 app = Flask(__name__)
 
@@ -41,12 +42,28 @@ def find_coords(url: str):
     regex2 = r"!3d(\d+)\.(\d+)!4d(\d+)\.(\d+)"
     match = re.search(regex, url)
     if not match:
-        response = requests.get(url)
-        url = urllib.parse.unquote(response.url)
-        if "utm_source" in url: 
-            match = re.search(regex2,url)
+        response = requests.get(
+            url,
+            allow_redirects=True,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resolved_url = urllib.parse.unquote(response.url)
+
+        # Some Google short links (e.g. https://maps.app.goo.gl/...) may not 302 to the long URL.
+        # In that case, extract the long maps URL from the returned HTML.
+        if "maps.app.goo.gl" in resolved_url or "goo.gl/maps" in resolved_url:
+            body = html.unescape(response.text or "")
+            m = re.search(r'(https?://www\.google\.com/maps[^"\'<>\s]+)', body)
+            if m:
+                resolved_url = urllib.parse.unquote(m.group(1))
+
+        url = resolved_url
+
+        if "utm_source" in url:
+            match = re.search(regex2, url)
         else:
-            match = re.search(regex, url)
+            match = re.search(regex, url) or re.search(regex2, url)
     if match:
         host = urllib.parse.urlparse(url).hostname
         if "google" in host:    
