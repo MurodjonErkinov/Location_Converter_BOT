@@ -52,6 +52,11 @@ def find_coords(url: str):
         if m:
             return m.group(1), m.group(2), "google"
 
+        # 3) Google path forms, e.g. /maps/search/40.133484,+67.823405
+        m = re.search(r"/maps/(?:search|place)/(-?\d+(?:\.\d+)?),\+?(-?\d+(?:\.\d+)?)", u)
+        if m:
+            return m.group(1), m.group(2), "google"
+
         # 3) Query parameters (?q=lat,lon or ?ll=lat,lon, etc.)
         try:
             parsed = urllib.parse.urlparse(u)
