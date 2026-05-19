@@ -190,6 +190,14 @@ def find_coords(url: str):
 
         url = resolved_url
 
+        # Yandex may block server-side resolving with a captcha page.
+        parsed_final = urllib.parse.urlparse(url)
+        final_host = (parsed_final.hostname or "").lower()
+        if "yandex" in final_host and ("showcaptcha" in parsed_final.path or "showcaptcha" in url):
+            if debug_resolve:
+                print("resolve: yandex captcha detected", flush=True)
+            return "yandex_captcha", False, False
+
         parsed_coords = parse_coords_from_url(url)
 
     if parsed_coords:
@@ -227,7 +235,15 @@ def webhook():
             sendMessage(chatId, "Salom! Location yuboring")
         else:
             host, lat, lon = find_coords(text)
-            if host and lat and lon:
+            if host == "yandex_captcha":
+                sendMessage(
+                    chatId,
+                    "Yandex linkni server tomonda ochishda CAPTCHA chiqyapti. "
+                    "Iltimos Yandex ilovada/браузерda linkni ochib, Share/Поделиться qilib "
+                    "chiqqan to‘liq linkni yuboring (unda ll yoki poi[point] bo‘ladi), "
+                    "yoki shunchaki Location (pin) yuboring.",
+                )
+            elif host and lat and lon:
                 sendLocation(chatId, lat, lon)
                 if "google" in host:
                     yandex_link = f"https://yandex.com/navi?whatshere%5Bpoint%5D={lon}%2C{lat}"
