@@ -128,6 +128,17 @@ def find_coords(url: str):
             headers={"User-Agent": "Mozilla/5.0"},
         )
         resolved_url = urllib.parse.unquote(response.url or url)
+        body = html.unescape(response.text or "")
+
+        def parse_coords_from_html(page: str):
+            # Look for embedded exact coords in page source
+            m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", page)
+            if m:
+                return m.group(1), m.group(2), "google"
+            m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", page)
+            if m:
+                return m.group(1), m.group(2), "google"
+            return None
 
         # Some short links (Google/Yandex) may not 302 to the long URL.
         # In that case, extract the long maps URL from the returned HTML.
@@ -136,7 +147,7 @@ def find_coords(url: str):
             or "goo.gl/maps" in resolved_url
             or "yandex" in (urllib.parse.urlparse(resolved_url).hostname or "").lower()
         ):
-            body = html.unescape(response.text or "")
+            # body already prepared above
 
             def _pick_first(matches):
                 for candidate in matches:
@@ -200,6 +211,35 @@ def find_coords(url: str):
             return "yandex_captcha", False, False
 
         parsed_coords = parse_coords_from_url(url)
+
+        # Google sometimes resolves to a query-only URL (q=...) without explicit lat/lon in the URL.
+        # Try extracting coordinates from the HTML, or re-resolving using the "api=1" search endpoint.
+        if not parsed_coords and "google" in (urllib.parse.urlparse(url).hostname or "").lower():
+            parsed_coords = parse_coords_from_html(body)
+            if debug_resolve and parsed_coords:
+                lat, lon, _ = parsed_coords
+                print(f"coords: source=html lat={lat} lon={lon}", flush=True)
+
+        if not parsed_coords and "google" in (urllib.parse.urlparse(url).hostname or "").lower():
+            try:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+                qval = qs.get("q", [None])[0] or qs.get("query", [None])[0]
+                if qval:
+                    resp2 = requests.get(
+                        "https://www.google.com/maps/search/",
+                        params={"api": "1", "query": qval},
+                        allow_redirects=True,
+                        timeout=15,
+                        headers={"User-Agent": "Mozilla/5.0"},
+                    )
+                    url2 = urllib.parse.unquote(resp2.url or "")
+                    body2 = html.unescape(resp2.text or "")
+                    if debug_resolve:
+                        print(f"resolve2: query={qval} final={url2} status={resp2.status_code}", flush=True)
+                    parsed_coords = parse_coords_from_url(url2) or parse_coords_from_html(body2)
+            except Exception as e:
+                if debug_resolve:
+                    print(f"resolve2: failed {e}", flush=True)
 
     if parsed_coords:
         lat, lon, provider = parsed_coords
