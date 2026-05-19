@@ -80,13 +80,14 @@ def find_coords(url: str):
                     lon, lat = lonlat
                     return lat, lon, "yandex"
 
-        # 1) Google @lat,lon (e.g. .../@41.123,-72.456,17z)
-        m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
+        # Google: prefer exact place coords (!3dLAT!4dLON) over viewport center (@lat,lon)
+        # 1) Google !3dLAT!4dLON (e.g. ...!3d41.123!4d-72.456)
+        m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
         if m:
             return m.group(1), m.group(2), "google"
 
-        # 2) Google !3dLAT!4dLON (e.g. ...!3d41.123!4d-72.456)
-        m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
+        # 2) Google @lat,lon (e.g. .../@41.123,-72.456,17z)
+        m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
         if m:
             return m.group(1), m.group(2), "google"
 
