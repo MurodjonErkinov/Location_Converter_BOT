@@ -38,9 +38,37 @@ def find_coords(url: str):
         return False, False, False
     url = match.group(1)    
     url = urllib.parse.unquote(url)
-    regex = r"[@=](\d+)\.(\d+),(\d+)\.(\d+)"
-    regex2 = r"!3d(\d+)\.(\d+)!4d(\d+)\.(\d+)"
-    match = re.search(regex, url)
+
+    debug_resolve = os.environ.get("DEBUG_RESOLVE") == "1"
+
+    def parse_coords_from_url(u: str):
+        # 1) Google @lat,lon (e.g. .../@41.123,-72.456,17z)
+        m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
+        if m:
+            return m.group(1), m.group(2), "google"
+
+        # 2) Google !3dLAT!4dLON (e.g. ...!3d41.123!4d-72.456)
+        m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
+        if m:
+            return m.group(1), m.group(2), "google"
+
+        # 3) Query parameters (?q=lat,lon or ?ll=lat,lon, etc.)
+        try:
+            parsed = urllib.parse.urlparse(u)
+            qs = urllib.parse.parse_qs(parsed.query)
+            for key in ("q", "query", "ll", "sll", "center"):
+                if key in qs and qs[key]:
+                    val = qs[key][0]
+                    mm = re.search(r"(-?\d+(?:\.\d+)?)[, ]+(-?\d+(?:\.\d+)?)", val)
+                    if mm:
+                        return mm.group(1), mm.group(2), "google"
+        except Exception:
+            pass
+
+        return None
+
+    parsed_coords = parse_coords_from_url(url)
+    match = None if parsed_coords else True
     if not match:
         response = requests.get(
             url,
@@ -48,30 +76,37 @@ def find_coords(url: str):
             timeout=15,
             headers={"User-Agent": "Mozilla/5.0"},
         )
-        resolved_url = urllib.parse.unquote(response.url)
+        resolved_url = urllib.parse.unquote(response.url or url)
 
         # Some Google short links (e.g. https://maps.app.goo.gl/...) may not 302 to the long URL.
         # In that case, extract the long maps URL from the returned HTML.
         if "maps.app.goo.gl" in resolved_url or "goo.gl/maps" in resolved_url:
             body = html.unescape(response.text or "")
-            m = re.search(r'(https?://www\.google\.com/maps[^"\'<>\s]+)', body)
+
+            # Try canonical/og:url first
+            m = re.search(r'rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']', body, re.I)
+            if not m:
+                m = re.search(r'property=["\']og:url["\']\s+content=["\']([^"\']+)["\']', body, re.I)
+
+            # Fallback: any visible google maps URL in html
+            if not m:
+                m = re.search(r'(https?://www\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
+            if not m:
+                m = re.search(r'(https?://maps\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
+
             if m:
                 resolved_url = urllib.parse.unquote(m.group(1))
 
+        if debug_resolve:
+            print(f"resolve: in={url} final={resolved_url} status={response.status_code}", flush=True)
+
         url = resolved_url
 
-        if "utm_source" in url:
-            match = re.search(regex2, url)
-        else:
-            match = re.search(regex, url) or re.search(regex2, url)
-    if match:
-        host = urllib.parse.urlparse(url).hostname
-        if "google" in host:    
-            lat = match.group(1) + "." + match.group(2)
-            lon = match.group(3) + "." + match.group(4)
-        elif "yandex" in host:
-            lon = match.group(1) + "." + match.group(2)
-            lat = match.group(3) + "." + match.group(4)
+        parsed_coords = parse_coords_from_url(url)
+
+    if parsed_coords:
+        lat, lon, provider = parsed_coords
+        host = urllib.parse.urlparse(url).hostname or provider
     return host, lat, lon
 
 def sendMessage(chatId, text):
