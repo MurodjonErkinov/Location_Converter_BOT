@@ -62,7 +62,8 @@ def find_coords(url: str):
         if "yandex" in hostname:
             try:
                 qs = urllib.parse.parse_qs(parsed.query)
-                for key in ("ll", "whatshere[point]", "pt"):
+                # Prefer actual POI point (not map center)
+                for key in ("poi[point]", "whatshere[point]", "pt", "ll"):
                     if key in qs and qs[key]:
                         lonlat = _first_lon_lat(qs[key][0])
                         if lonlat:
