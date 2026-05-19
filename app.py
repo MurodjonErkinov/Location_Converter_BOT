@@ -7,6 +7,8 @@ import os
 app = Flask(__name__)
 
 token = os.environ.get("TELEGRAM_BOT_TOKEN")
+if not token:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN env var is not set")
 
 def find_coords(url: str):
     host = False
@@ -44,6 +46,10 @@ def sendMessage(chatId, text):
 def sendLocation(chatId, lat, lon):
     requests.post(f"https://api.telegram.org/bot{token}/sendLocation",
                   params={"chat_id": chatId, "latitude": lat, "longitude": lon})
+
+@app.get("/")
+def health():
+    return "OK"
 
 @app.route(f"/{token}", methods=["POST"])
 def webhook():
