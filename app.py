@@ -68,8 +68,13 @@ def find_coords(url: str):
         return None
 
     parsed_coords = parse_coords_from_url(url)
-    match = None if parsed_coords else True
-    if not match:
+    if parsed_coords:
+        lat, lon, provider = parsed_coords
+        host = urllib.parse.urlparse(url).hostname or provider
+        return host, lat, lon
+
+    # No coords in the original URL -> resolve short link / HTML redirects.
+    if True:
         response = requests.get(
             url,
             allow_redirects=True,
