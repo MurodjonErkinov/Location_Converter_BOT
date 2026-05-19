@@ -80,16 +80,23 @@ def find_coords(url: str):
                     lon, lat = lonlat
                     return lat, lon, "yandex"
 
-        # Google: prefer exact place coords (!3dLAT!4dLON) over viewport center (@lat,lon)
-        # 1) Google !3dLAT!4dLON (e.g. ...!3d41.123!4d-72.456)
-        m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
-        if m:
-            return m.group(1), m.group(2), "google"
+        # Google: choose coordinates carefully because a URL may contain multiple locations.
+        # Prefer the viewport center (@lat,lon) when it's present in a /place/... URL,
+        # since it's typically the user-shared spot. Otherwise fall back to !3d..!4d...
+        if "google" in hostname:
+            if "/maps/place/" in u:
+                m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
+                if m:
+                    return m.group(1), m.group(2), "google"
 
-        # 2) Google @lat,lon (e.g. .../@41.123,-72.456,17z)
-        m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
-        if m:
-            return m.group(1), m.group(2), "google"
+            # Otherwise, prefer first exact pair from the payload.
+            m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
+            if m:
+                return m.group(1), m.group(2), "google"
+
+            m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
+            if m:
+                return m.group(1), m.group(2), "google"
 
         # 3) Google path forms, e.g. /maps/search/40.133484,+67.823405
         m = re.search(r"/maps/(?:search|place)/(-?\d+(?:\.\d+)?),\+?(-?\d+(?:\.\d+)?)", u)
@@ -340,7 +347,6 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
-
 
 
 
