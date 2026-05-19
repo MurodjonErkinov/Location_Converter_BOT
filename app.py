@@ -42,6 +42,43 @@ def find_coords(url: str):
     debug_resolve = os.environ.get("DEBUG_RESOLVE") == "1"
 
     def parse_coords_from_url(u: str):
+        parsed = urllib.parse.urlparse(u)
+        hostname = (parsed.hostname or "").lower()
+
+        def _first_lon_lat(val: str):
+            # Yandex commonly uses lon,lat
+            mm = re.search(r"(-?\d+(?:\.\d+)?)[, ]+(-?\d+(?:\.\d+)?)", val)
+            if not mm:
+                return None
+            return mm.group(1), mm.group(2)
+
+        def _first_lat_lon(val: str):
+            mm = re.search(r"(-?\d+(?:\.\d+)?)[, ]+(-?\d+(?:\.\d+)?)", val)
+            if not mm:
+                return None
+            return mm.group(1), mm.group(2)
+
+        # Yandex query forms first (lon,lat)
+        if "yandex" in hostname:
+            try:
+                qs = urllib.parse.parse_qs(parsed.query)
+                for key in ("ll", "whatshere[point]", "pt"):
+                    if key in qs and qs[key]:
+                        lonlat = _first_lon_lat(qs[key][0])
+                        if lonlat:
+                            lon, lat = lonlat
+                            return lat, lon, "yandex"
+            except Exception:
+                pass
+
+            # Some yandex links can embed lon,lat in the path after /? or /-/
+            m = re.search(r"whatshere%5Bpoint%5D=([^&]+)", u, re.I)
+            if m:
+                lonlat = _first_lon_lat(urllib.parse.unquote(m.group(1)))
+                if lonlat:
+                    lon, lat = lonlat
+                    return lat, lon, "yandex"
+
         # 1) Google @lat,lon (e.g. .../@41.123,-72.456,17z)
         m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
         if m:
@@ -59,14 +96,14 @@ def find_coords(url: str):
 
         # 3) Query parameters (?q=lat,lon or ?ll=lat,lon, etc.)
         try:
-            parsed = urllib.parse.urlparse(u)
             qs = urllib.parse.parse_qs(parsed.query)
             for key in ("q", "query", "ll", "sll", "center"):
                 if key in qs and qs[key]:
                     val = qs[key][0]
-                    mm = re.search(r"(-?\d+(?:\.\d+)?)[, ]+(-?\d+(?:\.\d+)?)", val)
-                    if mm:
-                        return mm.group(1), mm.group(2), "google"
+                    latlon = _first_lat_lon(val)
+                    if latlon:
+                        lat, lon = latlon
+                        return lat, lon, "google"
         except Exception:
             pass
 
@@ -75,6 +112,8 @@ def find_coords(url: str):
     parsed_coords = parse_coords_from_url(url)
     if parsed_coords:
         lat, lon, provider = parsed_coords
+        if debug_resolve:
+            print(f"coords: provider={provider} lat={lat} lon={lon}", flush=True)
         host = urllib.parse.urlparse(url).hostname or provider
         return host, lat, lon
 
@@ -88,9 +127,13 @@ def find_coords(url: str):
         )
         resolved_url = urllib.parse.unquote(response.url or url)
 
-        # Some Google short links (e.g. https://maps.app.goo.gl/...) may not 302 to the long URL.
+        # Some short links (Google/Yandex) may not 302 to the long URL.
         # In that case, extract the long maps URL from the returned HTML.
-        if "maps.app.goo.gl" in resolved_url or "goo.gl/maps" in resolved_url:
+        if (
+            "maps.app.goo.gl" in resolved_url
+            or "goo.gl/maps" in resolved_url
+            or "yandex" in (urllib.parse.urlparse(resolved_url).hostname or "").lower()
+        ):
             body = html.unescape(response.text or "")
 
             def _pick_first(matches):
@@ -105,11 +148,13 @@ def find_coords(url: str):
             if not m:
                 m = re.search(r'property=["\']og:url["\']\s+content=["\']([^"\']+)["\']', body, re.I)
 
-            # Fallback: any visible google maps URL in html
+            # Fallback: any visible maps URL in html (Google/Yandex)
             if not m:
                 m = re.search(r'(https?://www\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
             if not m:
                 m = re.search(r'(https?://maps\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
+            if not m:
+                m = re.search(r'(https?://yandex\.[^/]+/(?:maps|navi)[^"\'<>\s]+)', body, re.I)
 
             # Meta refresh redirect
             if not m:
@@ -148,6 +193,8 @@ def find_coords(url: str):
 
     if parsed_coords:
         lat, lon, provider = parsed_coords
+        if debug_resolve:
+            print(f"coords: provider={provider} lat={lat} lon={lon}", flush=True)
         host = urllib.parse.urlparse(url).hostname or provider
     return host, lat, lon
 
