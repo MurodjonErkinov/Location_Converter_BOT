@@ -82,12 +82,20 @@ def find_coords(url: str):
 
         # Google: choose coordinates carefully because a URL may contain multiple locations.
         # Prefer the viewport center (@lat,lon) when it's present in a /place/... URL,
-        # since it's typically the user-shared spot. Otherwise fall back to !3d..!4d...
+        # but if there is exactly one !3d..!4d.. pair and it differs notably from the viewport,
+        # treat !3d..!4d.. as the exact place pin.
         if "google" in hostname:
             if "/maps/place/" in u:
-                m = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
-                if m:
-                    return m.group(1), m.group(2), "google"
+                at = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
+                pairs = re.findall(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
+                if at:
+                    at_lat, at_lon = float(at.group(1)), float(at.group(2))
+                    if len(pairs) == 1:
+                        p_lat, p_lon = float(pairs[0][0]), float(pairs[0][1])
+                        # Rough threshold (~55m): 0.0005 degrees.
+                        if abs(p_lat - at_lat) > 0.0005 or abs(p_lon - at_lon) > 0.0005:
+                            return str(p_lat), str(p_lon), "google"
+                    return str(at_lat), str(at_lon), "google"
 
             # Otherwise, prefer first exact pair from the payload.
             m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
@@ -347,7 +355,6 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
-
 
 
 
