@@ -83,6 +83,13 @@ def find_coords(url: str):
         if "maps.app.goo.gl" in resolved_url or "goo.gl/maps" in resolved_url:
             body = html.unescape(response.text or "")
 
+            def _pick_first(matches):
+                for candidate in matches:
+                    if not candidate:
+                        continue
+                    return candidate
+                return None
+
             # Try canonical/og:url first
             m = re.search(r'rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']', body, re.I)
             if not m:
@@ -94,11 +101,36 @@ def find_coords(url: str):
             if not m:
                 m = re.search(r'(https?://maps\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
 
+            # Meta refresh redirect
+            if not m:
+                m = re.search(r'http-equiv=["\']refresh["\']\s+content=["\'][^"\']*url=([^"\']+)["\']', body, re.I)
+
+            # JS redirects (location.href / replace)
+            if not m:
+                m = re.search(r'location\.(?:href|replace)\s*=\s*["\']([^"\']+)["\']', body, re.I)
+            if not m:
+                m = re.search(r'window\.location\.(?:href|replace)\s*\(\s*["\']([^"\']+)["\']\s*\)', body, re.I)
+
+            # URL-encoded Google Maps link somewhere in HTML
+            if not m:
+                encoded_hits = re.findall(
+                    r'(https%3A%2F%2F(?:www%2E)?google%2E[^%]+%2Fmaps[^"\'<>\s]+)',
+                    body,
+                    re.I,
+                )
+                decoded = _pick_first([urllib.parse.unquote(h) for h in encoded_hits])
+                if decoded:
+                    m = re.match(r"(.+)", decoded)
+
             if m:
                 resolved_url = urllib.parse.unquote(m.group(1))
 
         if debug_resolve:
             print(f"resolve: in={url} final={resolved_url} status={response.status_code}", flush=True)
+            loc = response.headers.get("location") or response.headers.get("Location")
+            if loc:
+                print(f"resolve: header-location={loc}", flush=True)
+            print(f"resolve: content-type={response.headers.get('content-type')}", flush=True)
 
         url = resolved_url
 
