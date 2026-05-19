@@ -90,11 +90,19 @@ def find_coords(url: str):
                 pairs = re.findall(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
                 if at:
                     at_lat, at_lon = float(at.group(1)), float(at.group(2))
-                    if len(pairs) == 1:
-                        p_lat, p_lon = float(pairs[0][0]), float(pairs[0][1])
-                        # Rough threshold (~55m): 0.0005 degrees.
-                        if abs(p_lat - at_lat) > 0.0005 or abs(p_lon - at_lon) > 0.0005:
-                            return str(p_lat), str(p_lon), "google"
+                    if pairs:
+                        # Pick the !3d..!4d.. pair closest to the viewport center.
+                        best = None
+                        best_d = None
+                        for plat_s, plon_s in pairs:
+                            plat, plon = float(plat_s), float(plon_s)
+                            d = (plat - at_lat) ** 2 + (plon - at_lon) ** 2
+                            if best_d is None or d < best_d:
+                                best_d = d
+                                best = (plat, plon)
+                        if best is not None:
+                            return str(best[0]), str(best[1]), "google"
+
                     return str(at_lat), str(at_lon), "google"
 
             # Otherwise, prefer first exact pair from the payload.
@@ -355,7 +363,6 @@ def webhook():
         sendMessage(chatId, google_link)
 
     return "OK"
-
 
 
 
