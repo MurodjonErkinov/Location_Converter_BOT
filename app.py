@@ -10,6 +10,24 @@ token = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not token:
     raise RuntimeError("TELEGRAM_BOT_TOKEN env var is not set")
 
+def _maybe_set_webhook():
+    base_url = os.environ.get("WEBHOOK_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+    if not base_url:
+        return
+
+    webhook_url = f"{base_url.rstrip('/')}/{token}"
+    try:
+        requests.get(
+            f"https://api.telegram.org/bot{token}/setWebhook",
+            params={"url": webhook_url},
+            timeout=10,
+        )
+        print(f"Webhook set to: {webhook_url}", flush=True)
+    except Exception as e:
+        print(f"Failed to set webhook: {e}", flush=True)
+
+_maybe_set_webhook()
+
 def find_coords(url: str):
     host = False
     lon = False
@@ -59,6 +77,7 @@ def webhook():
 
     message = data["message"]
     chatId = message["chat"]["id"]
+    print(f"Incoming update: {data}", flush=True)
 
     if "text" in message:
         text = message["text"]
