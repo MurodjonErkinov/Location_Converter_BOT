@@ -237,6 +237,29 @@ def find_coords(url: str):
                     if debug_resolve:
                         print(f"resolve2: query={qval} final={url2} status={resp2.status_code}", flush=True)
                     parsed_coords = parse_coords_from_url(url2) or parse_coords_from_html(body2)
+
+                # If the URL contains ftid=0x...:0x... we can derive a CID and fetch the place page.
+                if not parsed_coords:
+                    ftid = qs.get("ftid", [None])[0]
+                    if ftid and ":" in ftid:
+                        try:
+                            cid_hex = ftid.split(":", 1)[1]
+                            cid = int(cid_hex, 16)
+                            resp3 = requests.get(
+                                "https://www.google.com/maps",
+                                params={"cid": str(cid)},
+                                allow_redirects=True,
+                                timeout=15,
+                                headers={"User-Agent": "Mozilla/5.0"},
+                            )
+                            url3 = urllib.parse.unquote(resp3.url or "")
+                            body3 = html.unescape(resp3.text or "")
+                            if debug_resolve:
+                                print(f"resolve3: cid={cid} final={url3} status={resp3.status_code}", flush=True)
+                            parsed_coords = parse_coords_from_url(url3) or parse_coords_from_html(body3)
+                        except Exception as e:
+                            if debug_resolve:
+                                print(f"resolve3: failed {e}", flush=True)
             except Exception as e:
                 if debug_resolve:
                     print(f"resolve2: failed {e}", flush=True)
