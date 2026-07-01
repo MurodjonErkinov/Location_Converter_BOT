@@ -58,11 +58,11 @@ def find_coords(url: str):
                 return None
             return mm.group(1), mm.group(2)
 
-        # Yandex query forms first (lon,lat)
+    
         if "yandex" in hostname:
             try:
                 qs = urllib.parse.parse_qs(parsed.query)
-                # Prefer actual POI point (not map center)
+                
                 for key in ("poi[point]", "whatshere[point]", "pt", "ll"):
                     if key in qs and qs[key]:
                         lonlat = _first_lon_lat(qs[key][0])
@@ -72,7 +72,7 @@ def find_coords(url: str):
             except Exception:
                 pass
 
-            # Some yandex links can embed lon,lat in the path after /? or /-/
+           
             m = re.search(r"whatshere%5Bpoint%5D=([^&]+)", u, re.I)
             if m:
                 lonlat = _first_lon_lat(urllib.parse.unquote(m.group(1)))
@@ -80,10 +80,7 @@ def find_coords(url: str):
                     lon, lat = lonlat
                     return lat, lon, "yandex"
 
-        # Google: choose coordinates carefully because a URL may contain multiple locations.
-        # Prefer the viewport center (@lat,lon) when it's present in a /place/... URL,
-        # but if there is exactly one !3d..!4d.. pair and it differs notably from the viewport,
-        # treat !3d..!4d.. as the exact place pin.
+        
         if "google" in hostname:
             if "/maps/place/" in u:
                 at = re.search(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)", u)
@@ -91,7 +88,7 @@ def find_coords(url: str):
                 if at:
                     at_lat, at_lon = float(at.group(1)), float(at.group(2))
                     if pairs:
-                        # Pick the !3d..!4d.. pair closest to the viewport center.
+                       
                         best = None
                         best_d = None
                         for plat_s, plon_s in pairs:
@@ -105,7 +102,7 @@ def find_coords(url: str):
 
                     return str(at_lat), str(at_lon), "google"
 
-            # Otherwise, prefer first exact pair from the payload.
+            
             m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", u)
             if m:
                 return m.group(1), m.group(2), "google"
@@ -114,12 +111,12 @@ def find_coords(url: str):
             if m:
                 return m.group(1), m.group(2), "google"
 
-        # 3) Google path forms, e.g. /maps/search/40.133484,+67.823405
+        
         m = re.search(r"/maps/(?:search|place)/(-?\d+(?:\.\d+)?),\+?(-?\d+(?:\.\d+)?)", u)
         if m:
             return m.group(1), m.group(2), "google"
 
-        # 3) Query parameters (?q=lat,lon or ?ll=lat,lon, etc.)
+       
         try:
             qs = urllib.parse.parse_qs(parsed.query)
             for key in ("q", "query", "ll", "sll", "center"):
@@ -142,7 +139,7 @@ def find_coords(url: str):
         host = urllib.parse.urlparse(url).hostname or provider
         return host, lat, lon
 
-    # No coords in the original URL -> resolve short link / HTML redirects.
+    
     if True:
         response = requests.get(
             url,
@@ -154,7 +151,7 @@ def find_coords(url: str):
         body = html.unescape(response.text or "")
 
         def parse_coords_from_html(page: str):
-            # Look for embedded exact coords in page source
+            
             m = re.search(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)", page)
             if m:
                 return m.group(1), m.group(2), "google"
@@ -162,8 +159,7 @@ def find_coords(url: str):
             if m:
                 return m.group(1), m.group(2), "google"
 
-            # JSON-ish patterns often present in Google Maps HTML
-            # Prefer "lat"/"lng" pairs when available.
+            
             m = re.search(r'"lat"\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*"lng"\s*:\s*(-?\d+(?:\.\d+)?)', page)
             if m:
                 return m.group(1), m.group(2), "google"
@@ -171,21 +167,19 @@ def find_coords(url: str):
             if m:
                 return m.group(2), m.group(1), "google"
 
-            # Some payloads contain a "center":[lat,lng] array
+           
             m = re.search(r'"center"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]', page)
             if m:
                 return m.group(1), m.group(2), "google"
             return None
 
-        # Some short links (Google/Yandex) may not 302 to the long URL.
-        # In that case, extract the long maps URL from the returned HTML.
+        
         if (
             "maps.app.goo.gl" in resolved_url
             or "goo.gl/maps" in resolved_url
             or "yandex" in (urllib.parse.urlparse(resolved_url).hostname or "").lower()
         ):
-            # body already prepared above
-
+           
             def _pick_first(matches):
                 for candidate in matches:
                     if not candidate:
@@ -193,12 +187,11 @@ def find_coords(url: str):
                     return candidate
                 return None
 
-            # Try canonical/og:url first
+           
             m = re.search(r'rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']', body, re.I)
             if not m:
                 m = re.search(r'property=["\']og:url["\']\s+content=["\']([^"\']+)["\']', body, re.I)
 
-            # Fallback: any visible maps URL in html (Google/Yandex)
             if not m:
                 m = re.search(r'(https?://www\.google\.[^/]+/maps[^"\'<>\s]+)', body, re.I)
             if not m:
@@ -206,17 +199,17 @@ def find_coords(url: str):
             if not m:
                 m = re.search(r'(https?://yandex\.[^/]+/(?:maps|navi)[^"\'<>\s]+)', body, re.I)
 
-            # Meta refresh redirect
+            
             if not m:
                 m = re.search(r'http-equiv=["\']refresh["\']\s+content=["\'][^"\']*url=([^"\']+)["\']', body, re.I)
 
-            # JS redirects (location.href / replace)
+           
             if not m:
                 m = re.search(r'location\.(?:href|replace)\s*=\s*["\']([^"\']+)["\']', body, re.I)
             if not m:
                 m = re.search(r'window\.location\.(?:href|replace)\s*\(\s*["\']([^"\']+)["\']\s*\)', body, re.I)
 
-            # URL-encoded Google Maps link somewhere in HTML
+            
             if not m:
                 encoded_hits = re.findall(
                     r'(https%3A%2F%2F(?:www%2E)?google%2E[^%]+%2Fmaps[^"\'<>\s]+)',
@@ -239,7 +232,7 @@ def find_coords(url: str):
 
         url = resolved_url
 
-        # Yandex may block server-side resolving with a captcha page.
+        
         parsed_final = urllib.parse.urlparse(url)
         final_host = (parsed_final.hostname or "").lower()
         if "yandex" in final_host and ("showcaptcha" in parsed_final.path or "showcaptcha" in url):
@@ -249,8 +242,7 @@ def find_coords(url: str):
 
         parsed_coords = parse_coords_from_url(url)
 
-        # Google sometimes resolves to a query-only URL (q=...) without explicit lat/lon in the URL.
-        # Try extracting coordinates from the HTML, or re-resolving using the "api=1" search endpoint.
+        
         if not parsed_coords and "google" in (urllib.parse.urlparse(url).hostname or "").lower():
             parsed_coords = parse_coords_from_html(body)
             if debug_resolve and parsed_coords:
@@ -275,7 +267,6 @@ def find_coords(url: str):
                         print(f"resolve2: query={qval} final={url2} status={resp2.status_code}", flush=True)
                     parsed_coords = parse_coords_from_url(url2) or parse_coords_from_html(body2)
 
-                # If the URL contains ftid=0x...:0x... we can derive a CID and fetch the place page.
                 if not parsed_coords:
                     ftid = qs.get("ftid", [None])[0]
                     if ftid and ":" in ftid:
